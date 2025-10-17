@@ -6,7 +6,7 @@ use spl_discriminator::SplDiscriminate;
 use spl_transfer_hook_interface::{
     instruction::{
         ExecuteInstruction,
-        InitializeExtraAccountMetaListInstruction
+        InitializeExtraAccountMetaListInstruction,
     },
 };
 use spl_tlv_account_resolution::state::ExtraAccountMetaList;
@@ -28,13 +28,6 @@ declare_id!("6cAZiTnevHt88rM8WyzaMTaUXQ7vB2hXnpRZW65Jrg2Z");
 #[program]
 pub mod transfer_hook {
     use super::*;
-
-    pub fn create_mint_with_extensions(
-        ctx: Context<TokenFactory>,
-        interest_rate: i16,
-    ) -> Result<()> {
-        ctx.accounts.init_mint(interest_rate)
-    }
     
     #[instruction(discriminator = InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE)]
     pub fn initialize_extra_accounts(ctx: Context<InitializeExtraAccountMetaList>) -> Result<()> { msg!("Initializing Transfer Hook...");
@@ -60,4 +53,9 @@ pub mod transfer_hook {
         // Call the transfer hook logic
         ctx.accounts.transfer_hook(amount)
     }
+    // 
+    // #[instruction(discriminator = FallbackInstruction::SPL_DISCRIMINATOR_SLICE)]
+    // pub fn fallback(ctx: Context<TransferHook>) -> Result<()> {
+    //     ctx.accounts.fallback(&crate::ID)
+    // }
 }

@@ -18,6 +18,7 @@ use anchor_spl::{
 };
 use anchor_spl::token_2022::spl_token_2022::extension::transfer_hook::get_program_id;
 use anchor_lang::accounts::interface_account::InterfaceAccount;
+use anchor_spl::token_2022::spl_token_2022::extension::transfer_hook::instruction::TransferHookInstruction;
 use crate::state::Whitelist;
 use crate::errors::WhitelistError;
 
@@ -111,4 +112,26 @@ impl<'info> TransferHook<'info> {
 
         Ok(())
     }
+
+    // fallback instruction handler as workaround to anchor instruction discriminator check
+    // pub fn fallback(
+    //     &mut self,
+    //     program_id: &Pubkey,
+    // ) -> Result<()> {
+    //     msg!("Transferred amount of an amount tokens" );
+    //     Ok(())
+    //     // let instruction = TransferHookInstruction::unpack(data)?;
+    // 
+    //     // match instruction discriminator to transfer hook interface execute instruction
+    //     // token2022 program CPIs this instruction on token transfer
+    //     // match instruction {
+    //     //     TransferHookInstruction::Execute { amount } => {
+    //     //         let amount_bytes = amount.to_le_bytes();
+    //     // 
+    //     //         msg!("Transferred amount is {}", amount);
+    //     //         Ok(())
+    //     //     }
+    //     //     _ => return Err(ProgramError::InvalidInstructionData.into()),
+    //     // }
+    // }
 }

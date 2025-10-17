@@ -8,7 +8,7 @@ use anchor_spl::token_2022::spl_token_2022::{
         interest_bearing_mint::{
             InterestBearingConfig,
             instruction::{
-                InterestBearingMintInstruction, 
+                InterestBearingMintInstruction,
                 InitializeInstructionData,
                 initialize as initialize_interest_bearing_mint_instruction,
             }
@@ -106,7 +106,7 @@ impl<'info> TokenFactory<'info> {
             &self.token_program.key(),
             &self.mint.key(),
             &self.user.key(),
-            Some( &self.user.key()), 
+            Some( &self.user.key()),
             decimals,
         )?;
 

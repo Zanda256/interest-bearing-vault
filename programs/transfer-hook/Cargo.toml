@@ -39,6 +39,8 @@ spl-transfer-hook-interface = "2.0.0"
 litesvm = "0.7.1"
 litesvm-token = "0.7.1"
 
+anchor-spl = "0.31.1"
+
 solana-instruction = "2.3.0"
 solana-keypair = "2.2.3"
 solana-native-token = "3.0.0"
@@ -48,7 +50,6 @@ solana-system-interface = "1.0.0"
 solana-transaction = "2.2.1"
 solana-message = "2.4.0"
 solana-sdk-ids = "2.2.1"
-spl-token-2022 = { version = "8.0.1", features = ["no-entrypoint"]}
 solana-rpc-client = "3.0.3"
 solana-address = "1.0.0"
 solana-account = "2.2.1"
