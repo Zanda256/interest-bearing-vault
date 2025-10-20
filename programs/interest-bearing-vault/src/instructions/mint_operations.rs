@@ -40,6 +40,9 @@ pub struct TokenFactory<'info> {
     #[account(mut)]
     pub extra_account_meta_list: UncheckedAccount<'info>,
 
+    /// CHECK: The transfer hook program ID
+    pub hook_program_id: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -71,18 +74,28 @@ impl<'info> TokenFactory<'info> {
             &self.token_program.key(),
         )?;
 
+        // Could use this
+        // transfer_hook_initialize<'info>(
+        //     ctx: CpiContext<'_, '_, '_, 'info, TransferHookInitialize<'info>>,
+        //     authority: Option<Pubkey>,
+        //     transfer_hook_program_id: Option<Pubkey>,
+        // ) -> Result<()>
+
         // 2. Initialize Transfer Hook Extension
         let init_transfer_hook_ix = initialize_transfer_hook_instruction(
             &self.token_program.key(),
             &self.mint.key(),
             Some(self.user.key()),
-            Some(crate::ID),
+            Some(self.hook_program_id.key()),
         )?;
 
         anchor_lang::solana_program::program::invoke(
             &init_transfer_hook_ix,
             &[
                 self.mint.to_account_info(),
+                self.mint.to_account_info(),
+                self.user.to_account_info(),
+                self.hook_program_id.to_account_info(),
             ],
         )?;
 
@@ -93,11 +106,13 @@ impl<'info> TokenFactory<'info> {
             Some(self.user.key()),
             interest_rate,
         )?;
-
+        
         anchor_lang::solana_program::program::invoke(
             &init_interest_ix,
             &[
+                self.token_program.to_account_info(),
                 self.mint.to_account_info(),
+                self.user.to_account_info(),
             ],
         )?;
 

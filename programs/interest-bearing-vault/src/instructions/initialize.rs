@@ -13,7 +13,6 @@ pub struct InitializeVault<'info> {
     #[account(mut)]
     pub vault_authority: Signer<'info>,
 
-    // IMPORTANT: Make sure this is read as an InterfaceAccount
     pub mint: InterfaceAccount<'info, Mint>,
 
     /// CHECK: Program id of the tf hook
@@ -33,7 +32,7 @@ pub struct InitializeVault<'info> {
         payer = vault_authority,
         associated_token::mint = mint,
         associated_token::authority = vault,
-        associated_token::token_program = associated_token_program,
+        associated_token::token_program = token_program,
     )]
     pub token_reserve: InterfaceAccount<'info, TokenAccount>,
 

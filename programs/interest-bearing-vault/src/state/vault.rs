@@ -12,3 +12,14 @@ pub struct Vault {
     pub num_depositors: u64,
     pub bump:u8,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct VaultRegistryEntry {
+    pub vault: Pubkey,
+    pub mint: Pubkey,
+    pub token_balance: u64,
+    pub num_withdraws: u64,
+    pub num_deposits: u64,
+  //  pub bump:u8,
+}

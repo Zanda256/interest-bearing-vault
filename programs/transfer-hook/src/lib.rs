@@ -1,7 +1,6 @@
-// #![allow(unexpected_cfgs)]
+#![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::error::{Error, AnchorError};
 use spl_discriminator::SplDiscriminate;
 use spl_transfer_hook_interface::{
     instruction::{
@@ -12,7 +11,6 @@ use spl_transfer_hook_interface::{
 use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 
 use instructions::*;
-use state::*;
 
 mod instructions;
 mod state;
@@ -29,8 +27,17 @@ declare_id!("6cAZiTnevHt88rM8WyzaMTaUXQ7vB2hXnpRZW65Jrg2Z");
 pub mod transfer_hook {
     use super::*;
     
+    pub fn add_to_whitelist(ctx: Context<WhitelistOperations>) -> Result<()> {
+        ctx.accounts.add_to_whitelist(ctx.bumps.whitelist_PDA)
+    }
+
+    pub fn remove_from_whitelist(ctx: Context<WhitelistOperations>) -> Result<()> {
+        ctx.accounts.remove_from_whitelist()
+    }
+    
     #[instruction(discriminator = InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE)]
-    pub fn initialize_extra_accounts(ctx: Context<InitializeExtraAccountMetaList>) -> Result<()> { msg!("Initializing Transfer Hook...");
+    pub fn initialize_extra_accounts(ctx: Context<InitializeExtraAccountMetaList>) -> Result<()> { 
+        msg!("Initializing Transfer Hook...");
 
         // Get the extra account metas for the transfer hook
         let extra_account_metas = InitializeExtraAccountMetaList::extra_account_metas()
@@ -53,7 +60,7 @@ pub mod transfer_hook {
         // Call the transfer hook logic
         ctx.accounts.transfer_hook(amount)
     }
-    // 
+
     // #[instruction(discriminator = FallbackInstruction::SPL_DISCRIMINATOR_SLICE)]
     // pub fn fallback(ctx: Context<TransferHook>) -> Result<()> {
     //     ctx.accounts.fallback(&crate::ID)

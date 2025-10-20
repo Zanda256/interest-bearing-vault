@@ -24,7 +24,7 @@ idl-build = [
 
 
 [dependencies]
-anchor-lang = { version = "0.31.1", features = ["interface-instructions"] }
+anchor-lang = { version = "0.31.1", features = ["interface-instructions", "init-if-needed"] }
 anchor-spl = "0.31.1"
 
 # Library for easy management of 8-byte discriminators
