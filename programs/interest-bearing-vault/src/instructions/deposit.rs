@@ -25,6 +25,15 @@ pub struct Deposit<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
+    // #[account(
+    //     init_if_needed,
+    //     payer = depositor,
+    //     space = 8 + VaultRegistryEntry::INIT_SPACE,
+    //     seeds = [b"vault_registry", vault.key().as_ref(), depositor.key().as_ref()],
+    //     bump,
+    // )]
+    // pub vault_registry_entry: Account<'info, VaultRegistryEntry>,
+
     /// The mint associated with the vault
     #[account(
         mut,
@@ -70,26 +79,17 @@ pub struct Deposit<'info> {
     )]
     pub depositor_whitelist_PDA: UncheckedAccount<'info>,
 
-    #[account(
-        init_if_needed,
-        payer = depositor,
-        space = 8 + VaultRegistryEntry::INIT_SPACE,
-        seeds = [b"vault_registry", vault.key().as_ref(), depositor.key().as_ref()],
-        bump,
-    )]
-    pub vault_registry_entry: Account<'info, VaultRegistryEntry>,
-
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> Deposit<'info> {
-    pub fn deposit_funds(&mut self, amount: u64) -> Result<()> {
+    pub fn deposit(&mut self, amount: u64) -> Result<()> {
         require!(amount > 0, crate::errors::VaultError::InvalidAmount);
         
         msg!("Deposit has been initiated");
-
+       
         onchain::invoke_transfer_checked(
             &self.token_program.key(),
             self.depositor_token_account.to_account_info(),
@@ -105,8 +105,8 @@ impl<'info> Deposit<'info> {
             self.mint.decimals,
             &[], // No signer seeds needed - depositor is already a signer
         )?;
-
-        msg!("Deposited {} tokens to PDA vault", amount);
+       
+       // msg!("Deposited {} tokens to PDA vault", amount);
         
         // Update vault state
         self.vault.token_reserve_amount = self.vault.token_reserve_amount
@@ -118,25 +118,38 @@ impl<'info> Deposit<'info> {
             .checked_add(1)
             .ok_or(crate::errors::VaultError::Overflow)?;
         
-        msg!("Deposited {} tokens to vault reserve {:?}", amount, &self.vault_token_reserve.key());
-        msg!("Total vault balance: {}", self.vault.token_reserve_amount);
-        msg!("Total depositors: {}", self.vault.num_depositors);
+        // msg!("Deposited {} tokens to vault reserve {:?}", amount, &self.vault_token_reserve.key());
+        // msg!("Total vault balance: {}", self.vault.token_reserve_amount);
+        // msg!("Total depositors: {}", self.vault.num_depositors);
         
         // Update vault registry
-        let v = VaultRegistryEntry{
-            vault: self.vault.key(),
-            mint: self.mint.key(),
-            token_balance: self.vault_registry_entry.token_balance
-                .checked_add(amount)
-                .ok_or(crate::errors::VaultError::Overflow)?,
-            num_withdraws: self.vault_registry_entry.num_withdraws,
-            num_deposits: self.vault_registry_entry.num_deposits
-                .checked_add(1)
-                .ok_or(crate::errors::VaultError::Overflow)?,
-          //  bump: registry_bump
-        };
-        self.vault_registry_entry.set_inner(v);
+        // let v = VaultRegistryEntry{
+        //     vault: self.vault.key(),
+        //     mint: self.mint.key(),
+        //     token_balance: self.vault_registry_entry.token_balance
+        //         .checked_add(amount)
+        //         .ok_or(crate::errors::VaultError::Overflow)?,
+        //     num_withdraws: self.vault_registry_entry.num_withdraws,
+        //     num_deposits: self.vault_registry_entry.num_deposits
+        //         .checked_add(1)
+        //         .ok_or(crate::errors::VaultError::Overflow)?,
+        //   //  bump: registry_bump
+        // };
+        // self.vault_registry_entry.set_inner(v);
+        // 
+        // self.vault_registry_entry.vault = self.vault.key();
+        // self.vault_registry_entry.mint = self.mint.key();
+        // self.vault_registry_entry.token_balance = self.vault_registry_entry.token_balance
+        //         .checked_add(amount)
+        //         .ok_or(crate::errors::VaultError::Overflow)?;
+        // self.vault_registry_entry.deposits = self.vault_registry_entry.num_deposits
+        //         .checked_add(1)
+        //         .ok_or(crate::errors::VaultError::Overflow)?;
         
         Ok(())
     }
 }
+
+
+// ====================================================================================================================
+

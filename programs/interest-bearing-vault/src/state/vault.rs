@@ -21,5 +21,5 @@ pub struct VaultRegistryEntry {
     pub token_balance: u64,
     pub num_withdraws: u64,
     pub num_deposits: u64,
-  //  pub bump:u8,
+    pub bump:u8,
 }

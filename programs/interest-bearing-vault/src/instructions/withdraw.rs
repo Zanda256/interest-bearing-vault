@@ -22,6 +22,15 @@ pub struct Withdraw<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
+
+    #[account(
+        mut,
+        // constraint =  withdrawer,
+        seeds = [b"vault_registry", vault.key().as_ref(), withdrawer.key().as_ref()],
+        bump,
+    )]
+    pub vault_registry_entry: Account<'info, VaultRegistryEntry>,
+
     /// The mint associated with the vault
     pub mint: InterfaceAccount<'info, Mint>,
 
@@ -56,11 +65,11 @@ pub struct Withdraw<'info> {
 
     /// CHECK: Whitelist account for withdrawer (resolved via transfer hook)
     #[account(
-        seeds = [b"whitelist", vault.key().as_ref()],
+        seeds = [b"whitelist", mint.key().as_ref(), withdrawer.key().as_ref()],
         bump,
         seeds::program = transfer_hook_program.key()
     )]
-    pub vault_whitelist: UncheckedAccount<'info>,
+    pub withdrawer_whitelist_PDA: UncheckedAccount<'info>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
@@ -70,10 +79,15 @@ pub struct Withdraw<'info> {
 impl<'info> Withdraw<'info> {
     pub fn withdraw(&mut self, amount: u64, bump: u8) -> Result<()> {
         require!(amount > 0, crate::errors::VaultError::InvalidAmount);
+        // require!(
+        //     self.vault_registry_entry.token_balance >= amount,
+        //     crate::errors::VaultError::InsufficientFunds
+        // );
         require!(
             self.vault.token_reserve_amount >= amount,
             crate::errors::VaultError::InsufficientFunds
         );
+        
 
         // Transfer tokens from vault reserve to withdrawer using SPL Token-2022 onchain helper
         // This properly handles transfer hooks by including additional accounts
@@ -86,11 +100,11 @@ impl<'info> Withdraw<'info> {
         let signer_seeds = &[&seeds[..]];
 
         // IMPORTANT: Only pass EXTRA accounts (not source/mint/dest/authority) in additional_accounts
-        let additional_accounts = vec![
-            self.extra_account_meta_list.to_account_info(),
-            self.vault_whitelist.to_account_info(),
-            self.transfer_hook_program.to_account_info(),
-        ];
+        // let additional_accounts = vec![
+        //     self.extra_account_meta_list.to_account_info(),
+        //     self.withdrawer_whitelist_PDA.to_account_info(),
+        //     self.transfer_hook_program.to_account_info(),
+        // ];
 
         spl_token_2022::onchain::invoke_transfer_checked(
             &self.token_program.key(),
@@ -98,7 +112,11 @@ impl<'info> Withdraw<'info> {
             self.mint.to_account_info(),
             self.withdrawer_token_account.to_account_info(),
             self.vault.to_account_info(),
-            &additional_accounts,
+            &[
+                self.extra_account_meta_list.to_account_info(),
+                self.withdrawer_whitelist_PDA.to_account_info(),
+                self.transfer_hook_program.to_account_info(),
+            ],
             amount,
             self.mint.decimals,
             signer_seeds,
@@ -111,6 +129,14 @@ impl<'info> Withdraw<'info> {
 
         msg!("Withdrew {} tokens from vault", amount);
         msg!("Remaining vault balance: {}", self.vault.token_reserve_amount);
+
+        // Update vault registry
+        self.vault_registry_entry.token_balance = self.vault_registry_entry.token_balance
+                .checked_sub(amount)
+                .ok_or(crate::errors::VaultError::Overflow)?;
+        self.vault_registry_entry.num_withdraws = self.vault_registry_entry.num_withdraws
+                .checked_add(1)
+                .ok_or(crate::errors::VaultError::Overflow)?;
 
         Ok(())
     }

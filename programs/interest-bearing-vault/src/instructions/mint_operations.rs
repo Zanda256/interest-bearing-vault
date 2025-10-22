@@ -93,7 +93,7 @@ impl<'info> TokenFactory<'info> {
             &init_transfer_hook_ix,
             &[
                 self.mint.to_account_info(),
-                self.mint.to_account_info(),
+                self.token_program.to_account_info(),
                 self.user.to_account_info(),
                 self.hook_program_id.to_account_info(),
             ],

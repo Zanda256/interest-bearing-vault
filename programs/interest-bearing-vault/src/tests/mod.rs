@@ -1087,16 +1087,16 @@ mod tests {
         let (mut program, payer) = setup();
         let transfer_hook_program_id = transfer_hook::ID;
         let payer_pubkey = payer.pubkey();
-    
+
         // Step 1: Create mint and initialize vault
         let mint = Keypair::new();
         let interest_rate: i16 = 500;
-    
+
         let (extra_account_meta_list, _) = Pubkey::find_program_address(
             &[b"extra-account-metas", mint.pubkey().as_ref()],
             &transfer_hook_program_id,
         );
-    
+
         // Create mint
         let accounts = crate::accounts::TokenFactory {
             user: payer_pubkey,
@@ -1106,32 +1106,32 @@ mod tests {
             system_program: SYSTEM_PROGRAM_ID,
             token_program: TOKEN_PROGRAM_ID,
         };
-    
+
         let init_mint_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts: accounts.to_account_metas(None),
             data: crate::instruction::CreateMintWithExtensions { interest_rate }.data(),
         };
-    
+
         let transaction = Transaction::new_signed_with_payer(
             &[init_mint_ix],
             Some(&payer_pubkey),
             &[&payer, &mint],
             program.latest_blockhash(),
         );
-    
+
         assert!(program.send_transaction(transaction).is_ok());
-    
+
         // Initialize vault
         let (vault_pda, _) =
             Pubkey::find_program_address(&[b"vault", payer_pubkey.as_ref()], &PROGRAM_ID);
-    
+
         let reserve_ata = associated_token::get_associated_token_address_with_program_id(
             &vault_pda,
             &mint.pubkey(),
             &TOKEN_PROGRAM_ID,
         );
-    
+
         let accounts = crate::accounts::InitializeVault {
             vault_authority: payer_pubkey,
             mint: mint.pubkey(),
@@ -1142,22 +1142,22 @@ mod tests {
             token_program: TOKEN_PROGRAM_ID,
             system_program: SYSTEM_PROGRAM_ID,
         };
-    
+
         let init_vault_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts: accounts.to_account_metas(None),
             data: crate::instruction::InitializeVault {}.data(),
         };
-    
+
         let transaction = Transaction::new_signed_with_payer(
             &[init_vault_ix],
             Some(&payer_pubkey),
             &[&payer],
             program.latest_blockhash(),
         );
-    
+
         assert!(program.send_transaction(transaction).is_ok());
-    
+
         // Step 1.5: Initialize transfer hook (ExtraAccountMetaList + Whitelist)
         // initialize_extra_account_metas(&mut program, &payer, &mint.pubkey());
 
@@ -1200,17 +1200,17 @@ mod tests {
         }
 
         assert!(res.is_ok(), "Add to whitelist failed");
-    
+
         // Step 2: Create depositor ATA and mint tokens to depositor
         let depositor_ata = create_ata(&mut program, &payer, &payer_pubkey, &mint.pubkey());
-    
+
         // Mint tokens to depositor
         let mint_amount = 1000u64;
         mint_tokens_to(&mut program, &mint.pubkey(), &depositor_ata, &payer, mint_amount);
-    
+
         // Step 3: Deposit tokens
         let deposit_amount = 500u64;
-    
+
         // Find transfer hook related accounts
         let (depositor_whitelist, _) = Pubkey::find_program_address(
             &[b"whitelist", mint.pubkey().as_ref(), payer_pubkey.as_ref()],
@@ -1222,7 +1222,7 @@ mod tests {
             &payer,
             &mint.pubkey(),
         );
-        
+
         let accounts = crate::accounts::Deposit {
             depositor: payer_pubkey,
             vault: vault_pda,
@@ -1247,7 +1247,7 @@ mod tests {
         msg!("depositor_whitelist_PDA: {}", depositor_whitelist);
         msg!("associated_token_program: {}", ASSOCIATED_TOKEN_PROGRAM_ID);
         msg!("token_program: {}", TOKEN_PROGRAM_ID);
-        msg!("system_program: {}", SYSTEM_PROGRAM_ID);    
+        msg!("system_program: {}", SYSTEM_PROGRAM_ID);
         let deposit_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts: accounts.to_account_metas(None),
@@ -1256,14 +1256,14 @@ mod tests {
             }
             .data(),
         };
-    
+
         let transaction = Transaction::new_signed_with_payer(
             &[deposit_ix],
             Some(&payer_pubkey),
             &[&payer],
             program.latest_blockhash(),
         );
-    
+
         let tx_result = program.send_transaction(transaction);
         match &tx_result {
             Ok(tx) => {
@@ -1276,17 +1276,17 @@ mod tests {
             }
         }
         assert!(tx_result.is_ok(), "Deposit should succeed");
-    
+
         // Step 4: Verify vault state
         let vault_account = program.get_account(&vault_pda).expect("Vault should exist");
         let mut vault_data: &[u8] = &vault_account.data;
         let vault: crate::state::Vault =
             anchor_lang::AccountDeserialize::try_deserialize(&mut vault_data)
                 .expect("Failed to deserialize vault");
-    
+
         assert_eq!(vault.token_reserve_amount, deposit_amount);
         assert_eq!(vault.num_depositors, 1);
-    
+
         // Verify depositor balance decreased
         // let depositor_ata_account = program.get_account(&depositor_ata).expect("Depositor ATA should exist");
         // let depositor_ata_data = spl_token_2022::state::Account::unpack(&depositor_ata_account.data).unwrap();
@@ -1295,7 +1295,7 @@ mod tests {
         // let token_reserve_ata_account = program.get_account(&reserve_ata).expect("Vault token reserve ATA should exist");
         // let token_reserve_ata_data = spl_token::state::Account::unpack(&token_reserve_ata_account.data).unwrap();
         // assert_eq!(token_reserve_ata_data.amount, 500, "Expected token reserve account to have 500 tokens");
-    
+
         println!("✅ Deposit test passed");
         println!("   Deposited: {} tokens", deposit_amount);
         println!("   Vault balance: {}", vault.token_reserve_amount);
