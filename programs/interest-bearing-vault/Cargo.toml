@@ -22,7 +22,7 @@ idl-build = [
 
 
 [dependencies]
-anchor-lang = { version = "0.31.1", features = ["interface-instructions"] }
+anchor-lang = { version = "0.31.1", features = ["interface-instructions", "init-if-needed"] }
 anchor-spl = "0.31.1"
 
 # Library for easy management of 8-byte discriminators
@@ -33,7 +33,6 @@ spl-tlv-account-resolution = "0.11.1"
 spl-transfer-hook-interface = "2.0.0"
 # SPL Token-2022 program with onchain helpers for transfer hooks
 spl-token-2022 = { version = "6.0", features = ["no-entrypoint"] }
-
 
 [dev-dependencies]
 transfer-hook = { path = "../transfer-hook", features = ["cpi"] }
@@ -47,11 +46,11 @@ solana-keypair = "2.2.3"
 solana-native-token = "3.0.0"
 solana-pubkey = "2.4.0"
 solana-signer = "2.2.1"
-solana-system-interface = "1.0.0"
 solana-transaction = "2.2.1"
 solana-message = "2.4.0"
 solana-sdk-ids = "2.2.1"
 solana-rpc-client = "3.0.3"
 solana-address = "1.0.0"
 solana-account = "2.2.1"
+
 

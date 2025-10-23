@@ -1,5 +1,7 @@
-use anchor_lang::prelude::*;
+use std::error::Error;
+use anchor_lang::{prelude::*, solana_program::program::{invoke, invoke_signed},};
 use anchor_spl::{
+
     associated_token::AssociatedToken,
     token_interface::{
         Mint, TokenAccount, TokenInterface
@@ -77,27 +79,27 @@ pub struct Withdraw<'info> {
 }
 
 impl<'info> Withdraw<'info> {
-    pub fn withdraw(&mut self, amount: u64, bump: u8) -> Result<()> {
+    pub fn withdraw(&mut self, amount: u64) -> Result<()> {
         require!(amount > 0, crate::errors::VaultError::InvalidAmount);
-        // require!(
-        //     self.vault_registry_entry.token_balance >= amount,
-        //     crate::errors::VaultError::InsufficientFunds
-        // );
+        require!(
+            self.vault_registry_entry.token_balance >= amount,
+            crate::errors::VaultError::InsufficientFunds
+        );
         require!(
             self.vault.token_reserve_amount >= amount,
             crate::errors::VaultError::InsufficientFunds
         );
-        
+
 
         // Transfer tokens from vault reserve to withdrawer using SPL Token-2022 onchain helper
         // This properly handles transfer hooks by including additional accounts
         let vault_authority = self.vault.vault_authority;
+        let bump = &[self.vault.bump];
         let seeds = &[
-            b"vault",
+            b"vault".as_ref(),
             vault_authority.as_ref(),
-            &[bump],
+            bump,
         ];
-        let signer_seeds = &[&seeds[..]];
 
         // IMPORTANT: Only pass EXTRA accounts (not source/mint/dest/authority) in additional_accounts
         // let additional_accounts = vec![
@@ -105,22 +107,54 @@ impl<'info> Withdraw<'info> {
         //     self.withdrawer_whitelist_PDA.to_account_info(),
         //     self.transfer_hook_program.to_account_info(),
         // ];
+        //
 
-        spl_token_2022::onchain::invoke_transfer_checked(
+        let v_signer_meta = AccountMeta::new(self.vault.key(), true);
+
+        let mut transfer_ix =  spl_token_2022::instruction::transfer_checked(
             &self.token_program.key(),
+            &self.vault_token_reserve.key(),
+            &self.mint.key(),
+            &self.withdrawer_token_account.key(),
+            &self.vault.key(),
+            &[&self.withdrawer_token_account.key()],
+            amount,
+            self.mint.decimals,
+        ).map_err(|e:ProgramError|{msg!("Unable to invoke instruction: {:?}", e); e } )?;
+
+        transfer_ix.accounts.push(AccountMeta::new_readonly(self.extra_account_meta_list.key(), false));
+        transfer_ix.accounts.push(AccountMeta::new(self.withdrawer_whitelist_PDA.key(), false));
+
+        let account_infos = &[
             self.vault_token_reserve.to_account_info(),
             self.mint.to_account_info(),
             self.withdrawer_token_account.to_account_info(),
             self.vault.to_account_info(),
-            &[
-                self.extra_account_meta_list.to_account_info(),
-                self.withdrawer_whitelist_PDA.to_account_info(),
-                self.transfer_hook_program.to_account_info(),
-            ],
-            amount,
-            self.mint.decimals,
-            signer_seeds,
-        )?;
+            self.token_program.to_account_info(), // The Token Program must be in this list for `invoke`
+            self.extra_account_meta_list.to_account_info(),
+            self.withdrawer_whitelist_PDA.to_account_info(),
+            self.transfer_hook_program.to_account_info(),
+        ];
+
+        msg!("On to invoke instruction.");
+
+        invoke_signed(&transfer_ix, account_infos, &[seeds])?;
+
+        // spl_token_2022::onchain::invoke_transfer_checked(
+        //     &self.token_program.key(),
+        //     self.vault_token_reserve.to_account_info(),
+        //     self.mint.to_account_info(),
+        //     self.withdrawer_token_account.to_account_info(),
+        //     self.vault.to_account_info(),
+        //     &[
+        //         self.extra_account_meta_list.to_account_info(),
+        //         self.withdrawer_whitelist_PDA.to_account_info(),
+        //         self.transfer_hook_program.to_account_info(),
+        //     ],
+        //     amount,
+        //     self.mint.decimals,
+        //     &[],
+        // ).map_err(|e:ProgramError|{msg!("Unable to invoke instruction: {:?}", e); e } )?;
 
         // Update vault state
         self.vault.token_reserve_amount = self.vault.token_reserve_amount

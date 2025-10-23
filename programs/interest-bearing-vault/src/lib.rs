@@ -28,11 +28,10 @@ pub mod interest_bearing_vault {
     }
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-        ctx.accounts.deposit(amount)
+        ctx.accounts.deposit(amount, ctx.bumps.vault_registry_entry)
     }
 
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-        let bump = ctx.accounts.vault.bump;
-        ctx.accounts.withdraw(amount, bump)
+        ctx.accounts.withdraw(amount)
     }
 }

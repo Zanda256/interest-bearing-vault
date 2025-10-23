@@ -58,16 +58,15 @@ impl<'info> TransferHook<'info> {
             self.source_token.key(),
             self.destination_token.key()
         );
-
-        // Note: check_is_transferring() is commented out for LiteSVM compatibility
-        // Uncomment for production use on devnet/mainnet
-        // self.check_is_transferring()?;
+        
+        self.check_is_transferring()?;
 
         // Optional: Check whitelist if desired
         // Uncomment the code below to enforce whitelist validation:
-        /*
-        let owner_key = self.owner.key();
-        let seeds = &["whitelist".as_bytes(), owner_key.as_ref()];
+        
+        let (owner_key, mint_key) = (self.owner.key(), self.mint.key());
+      
+        let seeds = &["whitelist".as_bytes(),mint_key.as_ref(), owner_key.as_ref()];
         let (whitelist_pda, u_bump) = Pubkey::find_program_address(seeds, &crate::ID);
         if whitelist_pda != self.user_whitelist_account.key() {
             return Err(WhitelistError::AccountDoesNotMatch.into());
@@ -85,7 +84,7 @@ impl<'info> TransferHook<'info> {
             msg!("PDA was not initialized.");
             return Err(WhitelistError::AccountNotWhitelisted.into());
         }
-        */
+        
 
         Ok(())
     }

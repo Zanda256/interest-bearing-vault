@@ -2,6 +2,8 @@ use anchor_lang::prelude::Pubkey;
 
 #[cfg(test)]
 mod tests {
+    use std::mem;
+    use anchor_lang::prelude::{Rent, SolanaSysvar};
     use super::*;
     use crate::instructions::InitializeVault;
     use anchor_lang::solana_program::sysvar::clock::Clock;
@@ -13,7 +15,7 @@ mod tests {
     use transfer_hook;
     use {
         anchor_lang::{
-            prelude::msg, solana_program::program_pack::Pack, AccountDeserialize, InstructionData,
+            prelude::msg, solana_program::program_pack::{Pack, IsInitialized},AccountDeserialize, InstructionData,
             ToAccountMetas,
         },
         anchor_spl::{
@@ -27,7 +29,7 @@ mod tests {
                     transfer_hook::TransferHook as TransferHookExt, BaseStateWithExtensions,
                     ExtensionType, StateWithExtensions,
                 },
-                state::Mint as Token2022Mint,
+                state::{Mint as Token2022Mint,},
                 ID as TOKEN_PROGRAM_ID,
             },
         },
@@ -38,7 +40,7 @@ mod tests {
             CreateMint,
             MintTo,
         },
-        solana_account::{Account, ReadableAccount},
+        solana_account::{Account,  WritableAccount,ReadableAccount},
         solana_address::Address,
         solana_instruction::Instruction,
         solana_keypair::Keypair,
@@ -51,6 +53,8 @@ mod tests {
         solana_transaction::Transaction,
         std::{path::PathBuf, str::FromStr},
     };
+    
+    use spl_token_2022::generic_token_account::GenericTokenAccount;
 
     static PROGRAM_ID: Pubkey = crate::ID;
 
@@ -1132,6 +1136,10 @@ mod tests {
             &TOKEN_PROGRAM_ID,
         );
 
+        // let reserve_ata = CreateAssociatedTokenAccount::new(&mut program, &payer, &mint.pubkey())
+        //     .owner(&vault_pda).send().unwrap();
+        // msg!("test_deposit: reserve_ata: {}\n", reserve_ata);
+
         let accounts = crate::accounts::InitializeVault {
             vault_authority: payer_pubkey,
             mint: mint.pubkey(),
@@ -1217,6 +1225,11 @@ mod tests {
             &transfer_hook_program_id,
         );
 
+
+        let seeds  = &["vault_registry".as_bytes(), vault_pda.as_ref(), payer_pubkey.as_ref()];
+
+        let (registryPDA, r_bump) = Pubkey::find_program_address(seeds, &crate::ID);
+
         initialize_extra_account_metas(
             &mut program,
             &payer,
@@ -1226,6 +1239,7 @@ mod tests {
         let accounts = crate::accounts::Deposit {
             depositor: payer_pubkey,
             vault: vault_pda,
+            vault_registry_entry: registryPDA,
             mint: mint.pubkey(),
             depositor_token_account: depositor_ata,
             vault_token_reserve: reserve_ata,
@@ -1288,204 +1302,307 @@ mod tests {
         assert_eq!(vault.num_depositors, 1);
 
         // Verify depositor balance decreased
-        // let depositor_ata_account = program.get_account(&depositor_ata).expect("Depositor ATA should exist");
-        // let depositor_ata_data = spl_token_2022::state::Account::unpack(&depositor_ata_account.data).unwrap();
+        let mut depositor_ata_account = program.get_account(&depositor_ata).expect("Depositor ATA should exist");
+        // assert!(depositor_ata_account.is_initialized());
+        // let depositor_ata_data = TokenAccount::try_deserialize(&mut depositor_ata_account.data.as_slice()).unwrap();
+        // let depositor_ata_data = spl_token_2022::state::Account::unpack_unchecked(&depositor_ata_account.data).unwrap();
         // assert_eq!(depositor_ata_data.amount, 500, "Expected depositor account to have 500 tokens");
 
-        // let token_reserve_ata_account = program.get_account(&reserve_ata).expect("Vault token reserve ATA should exist");
-        // let token_reserve_ata_data = spl_token::state::Account::unpack(&token_reserve_ata_account.data).unwrap();
-        // assert_eq!(token_reserve_ata_data.amount, 500, "Expected token reserve account to have 500 tokens");
+        let token_reserve_ata_account = program.get_account(&reserve_ata).expect("Vault token reserve ATA should exist");
+       // let token_reserve_ata_data = spl_token::state::Account::unpack(token_reserve_ata_account.data.as_slice()).unwrap();
+       // assert_eq!(token_reserve_ata_data.amount, 500, "Expected token reserve account to have 500 tokens");
+        
+        assert!(spl_token_2022::state::Account::valid_account_data(token_reserve_ata_account.data.as_slice()), "Invalid token_reserve_ata_account data");
 
-        println!("✅ Deposit test passed");
-        println!("   Deposited: {} tokens", deposit_amount);
-        println!("   Vault balance: {}", vault.token_reserve_amount);
+        let v = spl_token_2022::state::Account::unpack_account_owner(
+            &token_reserve_ata_account.data, 
+        ).expect("Failed to unpack reserve token account account owner");
+        assert_eq!(v,  &vault_pda, "Token account owner is not what we expected");
+
+        let m = spl_token_2022::state::Account::unpack_account_mint(
+            &token_reserve_ata_account.data
+        ).expect("Token reserve ata should be valid");
+        assert_eq!(m, &mint.pubkey(), "Token mint account is not what we expected"); 
+        
+        // println!("token_reserve_ata_data  length{:?}", token_reserve_ata_account.data.len());
+        // println!("token_reserve_ata_data {:?}", token_reserve_ata_account.data);
+
+        println!("Deposit test passed");
+        // println!("Deposited: {} tokens", deposit_amount);
+        // println!("Vault balance: {}", vault.token_reserve_amount);
     }
 
-    // #[test]
-    // fn test_withdraw() {
-    //     let (mut program, payer) = setup();
-    //     let transfer_hook_program_id = transfer_hook::ID;
-    //     let payer_pubkey = payer.pubkey();
-    //
-    //     // Setup: Create mint, vault, and deposit tokens first
-    //     let mint = Keypair::new();
-    //     let interest_rate: i16 = 500;
-    //
-    //     let (extra_account_meta_list, _) = Pubkey::find_program_address(
-    //         &[b"extra-account-metas", mint.pubkey().as_ref()],
-    //         &transfer_hook_program_id,
-    //     );
-    //
-    //     // Create mint
-    //     let init_mint_ix = Instruction {
-    //         program_id: PROGRAM_ID,
-    //         accounts: crate::accounts::TokenFactory {
-    //             user: payer_pubkey,
-    //             mint: mint.pubkey(),
-    //             extra_account_meta_list,
-    //             hook_program_id: transfer_hook::ID,
-    //             system_program: SYSTEM_PROGRAM_ID,
-    //             token_program: TOKEN_PROGRAM_ID,
-    //         }
-    //         .to_account_metas(None),
-    //         data: crate::instruction::CreateMintWithExtensions { interest_rate }.data(),
-    //     };
-    //
-    //     program
-    //         .send_transaction(Transaction::new_signed_with_payer(
-    //             &[init_mint_ix],
-    //             Some(&payer_pubkey),
-    //             &[&payer, &mint],
-    //             program.latest_blockhash(),
-    //         ))
-    //         .unwrap();
-    //
-    //     // Initialize vault
-    //     let (vault_pda, _) =
-    //         Pubkey::find_program_address(&[b"vault", payer_pubkey.as_ref()], &PROGRAM_ID);
-    //
-    //     let reserve_ata = associated_token::get_associated_token_address_with_program_id(
-    //         &vault_pda,
-    //         &mint.pubkey(),
-    //         &TOKEN_PROGRAM_ID,
-    //     );
-    //
-    //     let init_vault_ix = Instruction {
-    //         program_id: PROGRAM_ID,
-    //         accounts: crate::accounts::InitializeVault {
-    //             vault_authority: payer_pubkey,
-    //             mint: mint.pubkey(),
-    //             hook_program_id: transfer_hook_program_id,
-    //             vault: vault_pda,
-    //             token_reserve: reserve_ata,
-    //             associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-    //             token_program: TOKEN_PROGRAM_ID,
-    //             system_program: SYSTEM_PROGRAM_ID,
-    //         }
-    //         .to_account_metas(None),
-    //         data: crate::instruction::InitializeVault {}.data(),
-    //     };
-    //
-    //     program
-    //         .send_transaction(Transaction::new_signed_with_payer(
-    //             &[init_vault_ix],
-    //             Some(&payer_pubkey),
-    //             &[&payer],
-    //             program.latest_blockhash(),
-    //         ))
-    //         .unwrap();
-    //
-    //     // Initialize transfer hook (ExtraAccountMetaList + Whitelist)
-    //     initialize_extra_account_metas(&mut program, &payer, &mint.pubkey());
-    //     initialize_whitelist(&mut program, &payer, &payer_pubkey);
-    //     initialize_whitelist(&mut program, &payer, &vault_pda); // Whitelist vault PDA too
-    //
-    //     // Create depositor ATA and mint tokens
-    //     let depositor_ata = create_ata(&mut program, &payer, &payer_pubkey, &mint.pubkey());
-    //     mint_tokens_to(&mut program, &mint.pubkey(), &depositor_ata, &payer, 1000);
-    //
-    //     // Deposit tokens
-    //     let deposit_amount = 800u64;
-    //
-    //     // Find transfer hook related accounts
-    //     let (depositor_whitelist, _) = Pubkey::find_program_address(
-    //         &[b"whitelist", payer_pubkey.as_ref()],
-    //         &transfer_hook_program_id,
-    //     );
-    //
-    //     let (vault_whitelist, _) = Pubkey::find_program_address(
-    //         &[b"whitelist", vault_pda.as_ref()],
-    //         &transfer_hook_program_id,
-    //     );
-    //
-    //     let deposit_ix = Instruction {
-    //         program_id: PROGRAM_ID,
-    //         accounts: crate::accounts::Deposit {
-    //             depositor: payer_pubkey,
-    //             vault: vault_pda,
-    //             mint: mint.pubkey(),
-    //             depositor_token_account: depositor_ata,
-    //             vault_token_reserve: reserve_ata,
-    //             extra_account_meta_list,
-    //             transfer_hook_program: transfer_hook_program_id,
-    //             depositor_whitelist,
-    //             associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-    //             token_program: TOKEN_PROGRAM_ID,
-    //             system_program: SYSTEM_PROGRAM_ID,
-    //         }
-    //         .to_account_metas(None),
-    //         data: crate::instruction::Deposit {
-    //             amount: deposit_amount,
-    //         }
-    //         .data(),
-    //     };
-    //
-    //     program
-    //         .send_transaction(Transaction::new_signed_with_payer(
-    //             &[deposit_ix],
-    //             Some(&payer_pubkey),
-    //             &[&payer],
-    //             program.latest_blockhash(),
-    //         ))
-    //         .unwrap();
-    //
-    //     // Now test withdraw
-    //     let withdraw_amount = 300u64;
-    //     let withdraw_ix = Instruction {
-    //         program_id: PROGRAM_ID,
-    //         accounts: crate::accounts::Withdraw {
-    //             withdrawer: payer_pubkey,
-    //             vault: vault_pda,
-    //             mint: mint.pubkey(),
-    //             withdrawer_token_account: depositor_ata,
-    //             vault_token_reserve: reserve_ata,
-    //             extra_account_meta_list,
-    //             transfer_hook_program: transfer_hook_program_id,
-    //             vault_whitelist,
-    //             associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
-    //             token_program: TOKEN_PROGRAM_ID,
-    //             system_program: SYSTEM_PROGRAM_ID,
-    //         }
-    //         .to_account_metas(None),
-    //         data: crate::instruction::Withdraw {
-    //             amount: withdraw_amount,
-    //         }
-    //         .data(),
-    //     };
-    //
-    //     let transaction = Transaction::new_signed_with_payer(
-    //         &[withdraw_ix],
-    //         Some(&payer_pubkey),
-    //         &[&payer],
-    //         program.latest_blockhash(),
-    //     );
-    //
-    //     let tx_result = program.send_transaction(transaction);
-    //     match &tx_result {
-    //         Ok(tx) => {
-    //             msg!("\n\ntest_withdraw: transaction successful");
-    //             msg!("CUs Consumed: {}", tx.compute_units_consumed);
-    //         }
-    //         Err(err) => {
-    //             msg!("\n\ntest_withdraw: transaction failed with {:?}", err);
-    //         }
-    //     }
-    //     assert!(tx_result.is_ok(), "Withdraw should succeed");
-    //
-    //     // Verify vault state
-    //     let vault_account = program.get_account(&vault_pda).expect("Vault should exist");
-    //     let mut vault_data: &[u8] = &vault_account.data;
-    //     let vault: crate::state::Vault =
-    //         anchor_lang::AccountDeserialize::try_deserialize(&mut vault_data)
-    //             .expect("Failed to deserialize vault");
-    //
-    //     assert_eq!(vault.token_reserve_amount, deposit_amount - withdraw_amount);
-    //
-    //     println!("✅ Withdraw test passed");
-    //     println!("   Withdrew: {} tokens", withdraw_amount);
-    //     println!("   Remaining vault balance: {}", vault.token_reserve_amount);
-    // }
-    //
+    #[test]
+    fn test_withdraw() {
+        let (mut program, payer) = setup();
+        let transfer_hook_program_id = transfer_hook::ID;
+        let payer_pubkey = payer.pubkey();
+
+        // Step 1: Create mint and initialize vault
+        let mint = Keypair::new();
+        let interest_rate: i16 = 500;
+
+        let (extra_account_meta_list, _) = Pubkey::find_program_address(
+            &[b"extra-account-metas", mint.pubkey().as_ref()],
+            &transfer_hook_program_id,
+        );
+
+        // Create mint
+        let accounts = crate::accounts::TokenFactory {
+            user: payer_pubkey,
+            mint: mint.pubkey(),
+            extra_account_meta_list,
+            hook_program_id: transfer_hook::ID,
+            system_program: SYSTEM_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+        };
+
+        let init_mint_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: accounts.to_account_metas(None),
+            data: crate::instruction::CreateMintWithExtensions { interest_rate }.data(),
+        };
+
+        let transaction = Transaction::new_signed_with_payer(
+            &[init_mint_ix],
+            Some(&payer_pubkey),
+            &[&payer, &mint],
+            program.latest_blockhash(),
+        );
+
+        assert!(program.send_transaction(transaction).is_ok());
+
+        // Initialize vault
+        let (vault_pda, _) =
+            Pubkey::find_program_address(&[b"vault", payer_pubkey.as_ref()], &PROGRAM_ID);
+
+        let reserve_ata = associated_token::get_associated_token_address_with_program_id(
+            &vault_pda,
+            &mint.pubkey(),
+            &TOKEN_PROGRAM_ID,
+        );
+
+        // let reserve_ata = CreateAssociatedTokenAccount::new(&mut program, &payer, &mint.pubkey())
+        //     .owner(&vault_pda).send().unwrap();
+        // msg!("test_deposit: reserve_ata: {}\n", reserve_ata);
+
+        let accounts = crate::accounts::InitializeVault {
+            vault_authority: payer_pubkey,
+            mint: mint.pubkey(),
+            hook_program_id: transfer_hook_program_id,
+            vault: vault_pda,
+            token_reserve: reserve_ata,
+            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: SYSTEM_PROGRAM_ID,
+        };
+
+        let init_vault_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: accounts.to_account_metas(None),
+            data: crate::instruction::InitializeVault {}.data(),
+        };
+
+        let transaction = Transaction::new_signed_with_payer(
+            &[init_vault_ix],
+            Some(&payer_pubkey),
+            &[&payer],
+            program.latest_blockhash(),
+        );
+
+        assert!(program.send_transaction(transaction).is_ok());
+
+        // Step 1.5: Initialize transfer hook (ExtraAccountMetaList + Whitelist)
+        // initialize_extra_account_metas(&mut program, &payer, &mint.pubkey());
+
+        let (whitelist_acc, w_bump ) = Pubkey::find_program_address(
+            &["whitelist".as_bytes(), &mint.pubkey().as_ref(), &payer.pubkey().as_ref()],
+            &transfer_hook::ID,
+        );
+
+        let accounts = transfer_hook::accounts::WhitelistOperations{
+            admin:payer.pubkey(),
+            address: payer.pubkey(),
+            mint: mint.pubkey(),
+            whitelist_PDA: whitelist_acc,
+            system_program : SYSTEM_PROGRAM_ID
+        };
+
+        let ix = Instruction {
+            program_id: transfer_hook::ID,
+            accounts: accounts.to_account_metas(None),
+            data: transfer_hook::instruction::AddToWhitelist {}.data(),
+        };
+
+        let transaction = Transaction::new_signed_with_payer(
+            &[ix],
+            Some(&payer.pubkey()),
+            &[&payer],
+            program.latest_blockhash(),
+        );
+
+        let res = program.send_transaction(transaction);
+
+        match &res {
+            Ok(tx) => {
+                msg!("\n\ntest withdraw: add to whitelist: transaction successful:\nLogs:\n{:?}", tx.logs);
+                msg!("CUs Consumed: {}", tx.compute_units_consumed);
+            }
+            Err(err) => {
+                msg!("\n\ntest withdraw: add to whitelist: transaction failed with {:?}", err);
+            }
+        }
+
+        assert!(res.is_ok(), "Add to whitelist failed");
+
+        // Step 2: Create depositor ATA and mint tokens to depositor
+        let depositor_ata = create_ata(&mut program, &payer, &payer_pubkey, &mint.pubkey());
+
+        // Mint tokens to depositor
+        let mint_amount = 1000u64;
+        mint_tokens_to(&mut program, &mint.pubkey(), &depositor_ata, &payer, mint_amount);
+
+        // Step 3: Deposit tokens
+        let deposit_amount = 500u64;
+
+        // Find transfer hook related accounts
+        let (depositor_whitelist, _) = Pubkey::find_program_address(
+            &[b"whitelist", mint.pubkey().as_ref(), payer_pubkey.as_ref()],
+            &transfer_hook_program_id,
+        );
+
+        let seeds  = &["vault_registry".as_bytes(), vault_pda.as_ref(), payer_pubkey.as_ref()];
+
+        let (registryPDA, r_bump) = Pubkey::find_program_address(seeds, &crate::ID);
+
+        initialize_extra_account_metas(
+            &mut program,
+            &payer,
+            &mint.pubkey(),
+        );
+
+        let accounts = crate::accounts::Deposit {
+            depositor: payer_pubkey,
+            vault: vault_pda,
+            vault_registry_entry: registryPDA,
+            mint: mint.pubkey(),
+            depositor_token_account: depositor_ata,
+            vault_token_reserve: reserve_ata,
+            transfer_hook_program: transfer_hook_program_id,
+            extra_account_meta_list,
+            depositor_whitelist_PDA:depositor_whitelist,
+            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+            token_program: TOKEN_PROGRAM_ID,
+            system_program: SYSTEM_PROGRAM_ID,
+        };
+
+        msg!("depositor: {}", payer_pubkey);
+        msg!("vault: {}", vault_pda);
+        msg!("mint: {}", mint.pubkey());
+        msg!("depositor_token_account: {}", depositor_ata);
+        msg!("vault_token_reserve: {}", reserve_ata);
+        msg!("extra_account_meta_list: {}", extra_account_meta_list);
+        msg!("transfer_hook_program: {}", transfer_hook_program_id);
+        msg!("depositor_whitelist_PDA: {}", depositor_whitelist);
+        msg!("associated_token_program: {}", ASSOCIATED_TOKEN_PROGRAM_ID);
+        msg!("token_program: {}", TOKEN_PROGRAM_ID);
+        msg!("system_program: {}", SYSTEM_PROGRAM_ID);
+        let deposit_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: accounts.to_account_metas(None),
+            data: crate::instruction::Deposit {
+                amount: deposit_amount,
+            }
+                .data(),
+        };
+
+        let transaction = Transaction::new_signed_with_payer(
+            &[deposit_ix],
+            Some(&payer_pubkey),
+            &[&payer],
+            program.latest_blockhash(),
+        );
+
+        let tx_result = program.send_transaction(transaction);
+        match &tx_result {
+            Ok(tx) => {
+                msg!("\n\ntest_deposit: transaction successful");
+                msg!("CUs Consumed: {}", tx.compute_units_consumed);
+                msg!("Tx Logs: {:?}", tx.logs);
+            }
+            Err(err) => {
+                msg!("\n\ntest_deposit: transaction failed with {:?}", err);
+            }
+        }
+        assert!(tx_result.is_ok(), "Deposit should succeed");
+        
+        // Now test withdraw
+        let withdraw_amount = 300u64;
+        let withdraw_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: crate::accounts::Withdraw {
+                withdrawer: payer_pubkey,
+                vault: vault_pda,
+                vault_registry_entry: registryPDA,
+                mint: mint.pubkey(),
+                withdrawer_token_account: depositor_ata,
+                vault_token_reserve: reserve_ata,
+                extra_account_meta_list,
+                transfer_hook_program: transfer_hook_program_id,
+                withdrawer_whitelist_PDA: depositor_whitelist,
+                associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
+                token_program: TOKEN_PROGRAM_ID,
+                system_program: SYSTEM_PROGRAM_ID,
+            }
+            .to_account_metas(None),
+            data: crate::instruction::Withdraw {
+                amount: withdraw_amount,
+            }
+            .data(),
+        };
+    
+        let transaction = Transaction::new_signed_with_payer(
+            &[withdraw_ix],
+            Some(&payer_pubkey),
+            &[&payer],
+            program.latest_blockhash(),
+        );
+    
+        let tx_result = program.send_transaction(transaction);
+        match &tx_result {
+            Ok(tx) => {
+                msg!("\n\ntest_withdraw: transaction successful");
+                msg!("CUs Consumed: {}", tx.compute_units_consumed);
+            }
+            Err(err) => {
+                msg!("\n\ntest_withdraw: transaction failed with {:?}", err);
+            }
+        }
+        assert!(tx_result.is_ok(), "Withdraw should succeed");
+    
+        // Verify vault state
+        let vault_account = program.get_account(&vault_pda).expect("Vault should exist");
+        let mut vault_data: &[u8] = &vault_account.data;
+        let vault: crate::state::Vault =
+            anchor_lang::AccountDeserialize::try_deserialize(&mut vault_data)
+                .expect("Failed to deserialize vault");
+    
+        assert_eq!(vault.token_reserve_amount, deposit_amount - withdraw_amount);
+
+        // Verify registry state
+        let registryPDA_account = program.get_account(&registryPDA).expect("registryPDA account should exist");
+        let mut registryPDA_data: &[u8] = &registryPDA_account.data;
+        let registry: crate::state::VaultRegistryEntry =
+            anchor_lang::AccountDeserialize::try_deserialize(&mut registryPDA_data)
+                .expect("Failed to deserialize registry");
+
+        assert_eq!(registry.token_balance, deposit_amount - withdraw_amount);
+    
+        println!("✅ Withdraw test passed");
+        println!("   Withdrew: {} tokens", withdraw_amount);
+        println!("   Remaining vault balance: {}", vault.token_reserve_amount);
+    }
+    
     // #[test]
     // fn test_withdraw_insufficient_funds() {
     //     let (mut program, payer) = setup();

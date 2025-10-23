@@ -25,14 +25,14 @@ pub struct Deposit<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
-    // #[account(
-    //     init_if_needed,
-    //     payer = depositor,
-    //     space = 8 + VaultRegistryEntry::INIT_SPACE,
-    //     seeds = [b"vault_registry", vault.key().as_ref(), depositor.key().as_ref()],
-    //     bump,
-    // )]
-    // pub vault_registry_entry: Account<'info, VaultRegistryEntry>,
+    #[account(
+        init_if_needed,
+        payer = depositor,
+        space = 8 + VaultRegistryEntry::INIT_SPACE,
+        seeds = [b"vault_registry", vault.key().as_ref(), depositor.key().as_ref()],
+        bump,
+    )]
+    pub vault_registry_entry: Account<'info, VaultRegistryEntry>,
 
     /// The mint associated with the vault
     #[account(
@@ -85,7 +85,7 @@ pub struct Deposit<'info> {
 }
 
 impl<'info> Deposit<'info> {
-    pub fn deposit(&mut self, amount: u64) -> Result<()> {
+    pub fn deposit(&mut self, amount: u64, registry_bump:u8) -> Result<()> {
         require!(amount > 0, crate::errors::VaultError::InvalidAmount);
         
         msg!("Deposit has been initiated");
@@ -123,19 +123,21 @@ impl<'info> Deposit<'info> {
         // msg!("Total depositors: {}", self.vault.num_depositors);
         
         // Update vault registry
-        // let v = VaultRegistryEntry{
-        //     vault: self.vault.key(),
-        //     mint: self.mint.key(),
-        //     token_balance: self.vault_registry_entry.token_balance
-        //         .checked_add(amount)
-        //         .ok_or(crate::errors::VaultError::Overflow)?,
-        //     num_withdraws: self.vault_registry_entry.num_withdraws,
-        //     num_deposits: self.vault_registry_entry.num_deposits
-        //         .checked_add(1)
-        //         .ok_or(crate::errors::VaultError::Overflow)?,
-        //   //  bump: registry_bump
-        // };
-        // self.vault_registry_entry.set_inner(v);
+        let v = VaultRegistryEntry{
+            user: self.depositor.key(),
+            user_ata: self.depositor_token_account.key(),
+            vault: self.vault.key(),
+            mint: self.mint.key(),
+            token_balance: self.vault_registry_entry.token_balance
+                .checked_add(amount)
+                .ok_or(crate::errors::VaultError::Overflow)?,
+            num_withdraws: self.vault_registry_entry.num_withdraws,
+            num_deposits: self.vault_registry_entry.num_deposits
+                .checked_add(1)
+                .ok_or(crate::errors::VaultError::Overflow)?,
+            bump: registry_bump
+        };
+        self.vault_registry_entry.set_inner(v);
         // 
         // self.vault_registry_entry.vault = self.vault.key();
         // self.vault_registry_entry.mint = self.mint.key();

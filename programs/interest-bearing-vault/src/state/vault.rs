@@ -16,6 +16,8 @@ pub struct Vault {
 #[account]
 #[derive(InitSpace)]
 pub struct VaultRegistryEntry {
+    pub user: Pubkey,
+    pub user_ata:Pubkey,
     pub vault: Pubkey,
     pub mint: Pubkey,
     pub token_balance: u64,
